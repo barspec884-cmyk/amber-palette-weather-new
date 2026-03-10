@@ -1,0 +1,493 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Amber Weather — Black Edition</title>
+  <style>
+    :root {
+      --amber: #d4af37;
+      --bg-grad: radial-gradient(circle at center, #1a0f08 0%, #050302 100%);
+      --glass: rgba(255, 255, 255, 0.04);
+      --muted: #888;
+      --soft: #444;
+      --danger: #d88;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #e0e0e0;
+      background: var(--bg-grad);
+      min-height: 100vh;
+      text-align: center;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .nav-header {
+      display: flex;
+      justify-content: flex-start;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+
+    .back-btn {
+      text-decoration: none;
+      color: #888;
+      font-size: 0.75rem;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255,255,255,0.05);
+      padding: 8px 15px;
+      border-radius: 50px;
+      border: 1px solid rgba(212, 175, 55, 0.2);
+    }
+
+    .back-btn:active {
+      background: rgba(212, 175, 55, 0.1);
+      color: var(--amber);
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      letter-spacing: 4px;
+      color: var(--amber);
+      margin: 10px 0 30px;
+      text-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+    }
+
+    .weather-card {
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 24px;
+      padding: 2em;
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      width: 100%;
+      max-width: 350px;
+      transition: all 0.4s ease;
+      min-height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #manual {
+      margin-top: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 350px;
+    }
+
+    #place {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      border-radius: 50px;
+      padding: 12px 20px;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+      text-align: center;
+    }
+
+    #place::placeholder {
+      color: #777;
+    }
+
+    #search {
+      background: var(--amber);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      border-radius: 50px;
+      padding: 12px;
+      cursor: pointer;
+    }
+
+    #refresh {
+      margin-top: 20px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px dashed rgba(212, 175, 55, 0.4);
+      padding: 10px 20px;
+      border-radius: 50px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    #search:disabled,
+    #refresh:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .status {
+      font-size: 0.72rem;
+      color: var(--soft);
+      margin-top: 12px;
+      line-height: 1.6;
+    }
+
+    .error {
+      color: var(--danger);
+    }
+
+    .weather-inner {
+      width: 100%;
+    }
+
+    .place-name {
+      font-size: 1.1rem;
+      color: var(--amber);
+      margin-bottom: 15px;
+      letter-spacing: 1px;
+    }
+
+    .desc {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+
+    .temp {
+      font-size: 1.4rem;
+      color: #fff;
+    }
+
+    .meta {
+      font-size: 0.9rem;
+      color: #888;
+      margin-top: 8px;
+      line-height: 1.7;
+    }
+
+    .mini {
+      font-size: 0.65rem;
+      color: #444;
+      margin-top: 14px;
+      line-height: 1.7;
+    }
+
+    footer {
+      margin-top: auto;
+      padding: 30px 0;
+      font-size: 0.6rem;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="nav-header">
+    <a href="https://amber-tools-hub.vercel.app" class="back-btn">🏛 HUB</a>
+  </header>
+
+  <h1>AMBER WEATHER</h1>
+
+  <div id="weather" class="weather-card">
+    <p>📡 測位中…</p>
+  </div>
+
+  <div id="manual">
+    <input type="text" id="place" placeholder="地名を入力（例：港区）">
+    <button id="search">SEARCH CITY</button>
+  </div>
+
+  <button id="refresh">🔄 GPS REFRESH</button>
+
+  <footer>© AMBER PALETTE — BLACK EDITION</footer>
+
+<script>
+const CACHE_DURATION = 6 * 60 * 60 * 1000;
+const CACHE_KEYS = {
+  gps: "amberWeatherCacheGPS",
+  manual: "amberWeatherCacheManual"
+};
+
+let watchId = null;
+let finalizeTimer = null;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function setWeatherHTML(html) {
+  document.getElementById("weather").innerHTML = html;
+}
+
+function renderMessage(message, extra = "", isError = false) {
+  setWeatherHTML(`
+    <div class="weather-inner">
+      <p style="font-size:1rem; color:${isError ? "var(--danger)" : "#e0e0e0"};">${escapeHtml(message)}</p>
+      ${extra ? `<div class="status ${isError ? "error" : ""}">${extra}</div>` : ""}
+    </div>
+  `);
+}
+
+function getCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.time || !data.html) return null;
+    if (Date.now() - data.time > CACHE_DURATION) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setCache(key, payload) {
+  localStorage.setItem(key, JSON.stringify({
+    ...payload,
+    time: Date.now()
+  }));
+}
+
+function clearGeoWatch() {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  if (finalizeTimer) {
+    clearTimeout(finalizeTimer);
+    finalizeTimer = null;
+  }
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+async function getWeather(lat, lon) {
+  return await fetchJson(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+}
+
+function pickAddressFromComponents(result) {
+  const comps = result?.address_components || [];
+  const findLong = (type) => comps.find(c => c.types?.includes(type))?.long_name || "";
+
+  const ward = findLong("sublocality_level_1") || findLong("locality");
+  const city = findLong("locality") || findLong("administrative_area_level_2");
+  const prefecture = findLong("administrative_area_level_1");
+
+  return ward || city || prefecture || "";
+}
+
+async function getAddress(lat, lon) {
+  const data = await fetchJson(`/api/geocode?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+
+  if (!data.results?.[0]) {
+    return "現在地";
+  }
+
+  const first = data.results[0];
+  const byComponents = pickAddressFromComponents(first);
+  if (byComponents) return byComponents;
+
+  const addr = String(first.formatted_address || "")
+    .replace(/^日本[,、]?\s*/, "")
+    .replace(/〒\d{3}-\d{4}\s*/, "")
+    .trim();
+
+  return addr || "現在地";
+}
+
+function buildWeatherHTML({ place, weather, acc = 0, note = "" }) {
+  const desc = weather?.weather?.[0]?.description ?? "不明";
+  const icon = weather?.weather?.[0]?.icon ?? "01d";
+  const temp = typeof weather?.main?.temp === "number" ? weather.main.temp.toFixed(1) : "-";
+  const hum = weather?.main?.humidity ?? "-";
+  const press = weather?.main?.pressure ?? "-";
+
+  return `
+    <div class="weather-inner">
+      <div class="place-name">📍 ${escapeHtml(place)}</div>
+      <img
+        src="https://openweathermap.org/img/wn/${escapeHtml(icon)}@2x.png"
+        alt="${escapeHtml(desc)}"
+        width="80"
+        style="filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));"
+      >
+      <div class="desc">${escapeHtml(desc)}</div>
+      <div class="temp">🌡️ ${escapeHtml(temp)}℃</div>
+      <div class="meta">
+        💧 ${escapeHtml(hum)}%　⏱️ ${escapeHtml(press)} hPa
+      </div>
+      ${acc ? `<div class="mini">GPS精度 ±${escapeHtml(acc)}m</div>` : ""}
+      ${note ? `<div class="mini">${note}</div>` : ""}
+    </div>
+  `;
+}
+
+async function renderWeatherByCoords(lat, lon, options = {}) {
+  const {
+    label = "",
+    acc = 0,
+    force = false,
+    cacheKey = CACHE_KEYS.gps,
+    note = ""
+  } = options;
+
+  if (!force) {
+    const cached = getCache(cacheKey);
+    if (cached) {
+      setWeatherHTML(cached.html);
+      return;
+    }
+  }
+
+  const place = label || await getAddress(lat, lon);
+  const weather = await getWeather(lat, lon);
+
+  const html = buildWeatherHTML({
+    place,
+    weather,
+    acc,
+    note
+  });
+
+  setWeatherHTML(html);
+  setCache(cacheKey, {
+    lat,
+    lon,
+    html
+  });
+}
+
+async function initLocation(force = false) {
+  const cached = getCache(CACHE_KEYS.gps);
+  if (cached && !force) {
+    setWeatherHTML(cached.html.replace(
+      '</div>',
+      `<div class="mini">(CACHED GPS DATA)</div></div>`
+    ));
+  } else {
+    renderMessage("📡 測位中…", "現在地の精度が良い座標を取得しています。");
+  }
+
+  if (!navigator.geolocation) {
+    renderMessage("GPS非対応です", "この端末またはブラウザでは位置情報が使えません。", true);
+    return;
+  }
+
+  clearGeoWatch();
+
+  let bestPos = null;
+  let finished = false;
+
+  const finalize = async () => {
+    if (finished) return;
+    finished = true;
+    clearGeoWatch();
+
+    if (!bestPos) {
+      renderMessage("現在地を取得できませんでした", "位置情報の許可設定をご確認ください。", true);
+      return;
+    }
+
+    try {
+      await renderWeatherByCoords(
+        bestPos.coords.latitude,
+        bestPos.coords.longitude,
+        {
+          acc: Math.round(bestPos.coords.accuracy),
+          force,
+          cacheKey: CACHE_KEYS.gps,
+          note: force ? "GPS更新済み" : ""
+        }
+      );
+    } catch (err) {
+      renderMessage("天気取得に失敗しました", escapeHtml(err.message), true);
+    }
+  };
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      if (!bestPos || pos.coords.accuracy < bestPos.coords.accuracy) {
+        bestPos = pos;
+      }
+      if (bestPos && bestPos.coords.accuracy <= 150) {
+        finalize();
+      }
+    },
+    (err) => {
+      console.warn("GPS失敗:", err);
+      renderMessage("位置情報の取得に失敗しました", escapeHtml(err.message || "GPSエラー"), true);
+      clearGeoWatch();
+    },
+    {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 30000
+    }
+  );
+
+  finalizeTimer = setTimeout(finalize, 5000);
+}
+
+async function searchPlace() {
+  const input = document.getElementById("place");
+  const place = input.value.trim();
+
+  if (!place) {
+    alert("地名を入力してください。");
+    return;
+  }
+
+  renderMessage("検索中…", `「${escapeHtml(place)}」の天気を取得しています。`);
+
+  try {
+    const data = await fetchJson(`/api/geocode?place=${encodeURIComponent(place)}`);
+    if (!data.results?.[0]?.geometry?.location) {
+      throw new Error("地名が見つかりません");
+    }
+
+    const loc = data.results[0].geometry.location;
+    await renderWeatherByCoords(loc.lat, loc.lng, {
+      label: place,
+      acc: 0,
+      force: true,
+      cacheKey: CACHE_KEYS.manual,
+      note: "手動検索結果"
+    });
+  } catch (err) {
+    renderMessage("検索に失敗しました", escapeHtml(err.message), true);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("refresh").addEventListener("click", () => initLocation(true));
+  document.getElementById("search").addEventListener("click", searchPlace);
+  document.getElementById("place").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") searchPlace();
+  });
+
+  initLocation(false);
+});
+</script>
+</body>
+</html>
